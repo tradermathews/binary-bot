@@ -1,0 +1,75 @@
+from deriv_api import DerivAPI
+import asyncio
+
+# Adjustable parameters
+MARTINGALE_FACTOR = 2  # Multiplier for Martingale strategy
+TAKE_PROFIT = 10      # Take profit in currency units
+STOP_LOSS = 5         # Stop loss in currency units
+INITIAL_STAKE = 1      # Initial stake amount
+TRADE_DURATION = 5     # Duration of each trade in ticks
+
+# Deriv API credentials
+APP_ID = "your_app_id"  # Replace with your Deriv App ID
+TOKEN = "your_token"   # Replace with your API token
+
+# Initialize Deriv API
+api = DerivAPI(app_id=APP_ID)
+
+async def place_trade(stake, contract_type):
+    """
+    Place a trade on Deriv.com.
+    """
+    proposal = await api.buy({
+        "proposal": 1,
+        "amount": stake,
+        "basis": "stake",
+        "contract_type": contract_type,
+        "currency": "USD",
+        "duration": TRADE_DURATION,
+        "duration_unit": "t",
+        "symbol": "1HZ100V",  # Example symbol (Volatility 100 Index)
+    })
+    return proposal
+
+async def check_win(contract_id):
+    """
+    Check if the trade was successful.
+    """
+    await asyncio.sleep(TRADE_DURATION)  # Wait for the trade to complete
+    contract = await api.contract(contract_id)
+    return float(contract["profit"]) > 0
+
+async def trading_bot():
+    """
+    Main trading bot logic.
+    """
+    stake = INITIAL_STAKE
+    martingale_factor = MARTINGALE_FACTOR
+    consecutive_losses = 0
+
+    while True:
+        print(f"Placing trade with stake: {stake}")
+        proposal = await place_trade(stake, "CALL")  # Example: Trade CALL option
+        contract_id = proposal["contract_id"]
+
+        if await check_win(contract_id):
+            print("Trade won! Resetting stake.")
+            stake = INITIAL_STAKE
+            consecutive_losses = 0
+        else:
+            print("Trade lost. Applying Martingale strategy.")
+            stake *= martingale_factor
+            consecutive_losses += 1
+
+        # Stop if stop loss is reached
+        if stake > STOP_LOSS:
+            print("Stop loss reached. Exiting.")
+            break
+
+        # Take profit if target is reached
+        if stake >= TAKE_PROFIT:
+            print("Take profit reached. Exiting.")
+            break
+
+# Run the bot
+asyncio.run(trading_bot())
